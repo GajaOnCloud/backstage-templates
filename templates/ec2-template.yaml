@@ -1,0 +1,129 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+# https://backstage.io/docs/features/software-catalog/descriptor-format#kind-template
+kind: Template
+metadata:
+  name: nodejs-ec2-template
+  title: Node.JS App on EC2
+  description: A template for provisioning nodejs app on EC2
+spec:
+  owner: user:guest
+  type: service
+
+  # These parameters are used to generate the input form in the frontend, and are
+  # used to gather input data for the execution of the template.
+  parameters:
+    - title: Project Info
+      required:
+        - name
+      properties:
+        name:
+          title: Name
+          type: string
+          description: Unique name of the component
+          ui:autofocus: true
+          ui:options:
+            rows: 5
+        owner:
+          title: Owner
+          type: string
+          description: Owner of the component
+          ui:field: OwnerPicker
+          ui:options:
+            allowArbitraryValues: false
+
+    - title: Choose a location
+      required:
+        - repoUrl
+      properties:
+        repoUrl:
+          title: Repository Location
+          type: string
+          ui:field: RepoUrlPicker
+          ui:options:
+            allowedHosts:
+              - github.com
+    
+    - title: Deploy EC2
+      required:
+        - instanceType
+      properties:
+        instanceType:
+          title: Instance Type
+          type: string
+          description: What size EC2 instance
+          default: "t2.micro"
+          enum:
+            - "t2.micro"
+            - "t2.small"
+            - "t2.medium"
+
+
+  steps:
+    - id: fetch-infra-base
+      name: Fetch Infrastructure base
+      action: fetch:template
+      input:
+        url: https://github.com/Sanjeev-Thiyagarajan/ec2-infra-blueprint/tree/main
+        targetPath: './infra'
+        values:
+          name: ${{ parameters.name }}
+          owner: ${{ parameters.owner }}
+          instanceType: ${{ parameters.instanceType }}
+
+    - id: publish-infra
+      name: Publish Infrastructure
+      action: publish:github
+      input:
+        # folder: './infra'
+        sourcePath: ./infra
+        # include: infra/**
+        # stripPrefix: infra
+        allowedHosts: ['github.com']
+        description: This is ${{ parameters.name }}
+        repoUrl: ${{ parameters.repoUrl }}-infra
+
+    - id: register
+      name: Register
+      action: catalog:register
+      input:
+        repoContentsUrl: ${{ steps['publish-infra'].output.repoContentsUrl }}
+        catalogInfoPath: '/resource.yaml'
+
+    - id: fetch-app-base
+      name: Fetch App Base
+      action: fetch:template
+      input:
+        url: https://github.com/Sanjeev-Thiyagarajan/backstage-express-api-blueprint
+        targetPath: './code'
+        values:
+          name: ${{ parameters.name }}
+          owner: ${{ parameters.owner }}
+
+    # This step publishes the contents of the working directory to GitHub.
+    - id: publish-app
+      name: Publish App
+      action: publish:github
+      input:
+        # folder: './code'
+        # include: ./code/**
+        sourcePath: ./code
+        allowedHosts: ['github.com']
+        description: This is ${{ parameters.name }}
+        repoUrl: ${{ parameters.repoUrl }}
+
+    # The final step is to register our new component in the catalog.
+    - id: register-app
+      name: Register App
+      action: catalog:register
+      input:
+        repoContentsUrl: ${{ steps['publish-app'].output.repoContentsUrl }}
+        catalogInfoPath: '/catalog-info.yaml'
+
+  # Outputs are displayed to the user after a successful execution of the template.
+  output:
+    links:
+      - title: Repository
+        url: ${{ steps['publish-app'].output.remoteUrl }}
+      - title: Open in catalog
+        icon: catalog
+        entityRef: ${{ steps['register-app'].output.entityRef }}
