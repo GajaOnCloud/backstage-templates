@@ -53,7 +53,7 @@ spec:
       input:
         url: https://github.com/Sanjeev-Thiyagarajan/backstage-express-api-blueprint
         values:
-          project-name: ${{ parameters.name }}
+          name: ${{ parameters.name }}
           owner: ${{ parameters.owner }}
 
     # This step publishes the contents of the working directory to GitHub.
